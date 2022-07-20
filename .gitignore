@@ -2,3 +2,5 @@
 build/
 
 .idea
+
+prometheus/grafana/data

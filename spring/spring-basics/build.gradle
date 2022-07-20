@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group 'info.ankin.experiments.prometheus'
+version '1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility JavaVersion.VERSION_11
+}
+
+application {
+	mainClass.set 'info.ankin.experiments.prometheus.spring.basics.BasicsApplication'
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations.compileOnly.extendsFrom configurations.annotationProcessor
+
+dependencies {
+	implementation platform('org.springframework.boot:spring-boot-dependencies:2.7.1')
+	annotationProcessor platform('org.springframework.boot:spring-boot-dependencies:2.7.1')
+    implementation platform('org.springframework.cloud:spring-cloud-dependencies:2021.0.3')
+
+	annotationProcessor 'org.projectlombok:lombok'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	implementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
+
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'io.projectreactor:reactor-test'
+}
+
+tasks.withType(Test) { useJUnitPlatform() }
