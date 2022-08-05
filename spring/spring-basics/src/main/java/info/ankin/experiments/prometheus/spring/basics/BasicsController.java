@@ -17,8 +17,8 @@ public class BasicsController {
 
     @Counted(value = "home")
     @RequestMapping
-    Mono<ResponseEntity<Void>> get() {
-        return Mono.delay(Duration.ofMillis(state.sleep)).then(Mono.just(ResponseEntity.ok().build()));
+    Mono<ResponseEntity<State>> get() {
+        return Mono.delay(Duration.ofMillis(state.sleep)).then(Mono.just(ResponseEntity.ok(state)));
     }
 
     @RequestMapping(method = RequestMethod.POST)
