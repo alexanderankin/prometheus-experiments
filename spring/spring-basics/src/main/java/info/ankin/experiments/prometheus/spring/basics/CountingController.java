@@ -1,5 +1,6 @@
 package info.ankin.experiments.prometheus.spring.basics;
 
+import io.micrometer.core.annotation.Counted;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
@@ -22,11 +23,11 @@ public class CountingController {
         return Option.OPTION_LIST;
     }
 
+    @Counted(value = "options", extraTags = {"team", "demo-team"})
     @GetMapping(path = "/{option}")
     @ResponseStatus(HttpStatus.OK)
     void countOption(@PathVariable("option") Option option) {
-        Counter.builder(option.name()).register(meterRegistry).increment();
-        Counter.builder("options").register(meterRegistry).increment();
+        Counter.builder(option.name()).tag("team", "demo-team").register(meterRegistry).increment();
     }
 
     enum Option {
