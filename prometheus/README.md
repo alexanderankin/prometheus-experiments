@@ -27,3 +27,9 @@ and then run this:
 ```shell
 while true; do curl -s -w '\n' ${lh}:$p/actuator/prometheus | curl -s --data-binary @- ${lh}:9091/metrics/job/${a}; sleep 5; done;
 ```
+
+## dashboards
+
+### Spring Boot statistics:
+
+![Spring Boot Statistics grafana dashboard preview](./spring-boot-statistics.png)
