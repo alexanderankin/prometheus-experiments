@@ -2,7 +2,10 @@ package info.ankin.experiments.prometheus.spring.basics;
 
 import io.micrometer.core.annotation.Counted;
 import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,6 +20,11 @@ import java.util.Random;
 public class BasicsController {
     Random random = new Random();
     State state = new State();
+
+    @Autowired
+    void metrics(MeterRegistry meterRegistry) {
+        Gauge.builder("basics_state_sleep", state::getSleep).register(meterRegistry);
+    }
 
     @Timed(value = "basics_request_timing_home")
     @Counted(value = "basics_request_home")
