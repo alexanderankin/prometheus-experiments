@@ -20,16 +20,22 @@ import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.Nullable;
+import lombok.AllArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * <p>
@@ -190,7 +196,11 @@ public class TimedAspect {
 
     private Object perform(ProceedingJoinPoint pjp, Timed timed, Method method) throws Throwable {
         final String metricName = timed.value().isEmpty() ? DEFAULT_METRIC_NAME : timed.value();
-        final boolean stopWhenCompleted = CompletionStage.class.isAssignableFrom(method.getReturnType());
+        final StopType stopWhenCompleted = CompletionStage.class.isAssignableFrom(method.getReturnType())
+                ? StopType.ASYNC
+                : Publisher.class.isAssignableFrom(method.getReturnType())
+                ? StopType.RX
+                : StopType.NONE;
 
         if (!timed.longTask()) {
             return processWithTimer(pjp, timed, metricName, stopWhenCompleted);
@@ -200,12 +210,21 @@ public class TimedAspect {
         }
     }
 
-    private Object processWithTimer(ProceedingJoinPoint pjp, Timed timed, String metricName, boolean stopWhenCompleted)
+    private Object processWithTimer(ProceedingJoinPoint pjp, Timed timed, String metricName, StopType stopType)
             throws Throwable {
+
+
+        if (stopType == StopType.RX) {
+            Publisher<?> publisher = (Publisher<?>) pjp.proceed();
+            return new TimingPublisher<>(publisher, () -> {
+                Timer.Sample sample = Timer.start(registry);
+                return t -> record(pjp, timed, metricName, sample, t == null ? DEFAULT_EXCEPTION_TAG_VALUE : t.getClass().getSimpleName());
+            });
+        }
 
         Timer.Sample sample = Timer.start(registry);
 
-        if (stopWhenCompleted) {
+        if (stopType == StopType.ASYNC) {
             try {
                 return ((CompletionStage<?>) pjp.proceed()).whenComplete(
                         (result, throwable) -> record(pjp, timed, metricName, sample, getExceptionTag(throwable)));
@@ -246,6 +265,8 @@ public class TimedAspect {
 
     private String getExceptionTag(Throwable throwable) {
 
+        // this is the throwable passed in by CompletableFuture#whenComplete, so it can be null
+        //noinspection ConstantConditions
         if (throwable == null) {
             return DEFAULT_EXCEPTION_TAG_VALUE;
         }
@@ -257,12 +278,19 @@ public class TimedAspect {
         return throwable.getCause().getClass().getSimpleName();
     }
 
-    private Object processWithLongTaskTimer(ProceedingJoinPoint pjp, Timed timed, String metricName,
-            boolean stopWhenCompleted) throws Throwable {
+    private Object processWithLongTaskTimer(ProceedingJoinPoint pjp, Timed timed, String metricName, StopType stopType) throws Throwable {
+        Optional<LongTaskTimer> timer = buildLongTaskTimer(pjp, timed, metricName);
 
-        Optional<LongTaskTimer.Sample> sample = buildLongTaskTimer(pjp, timed, metricName).map(LongTaskTimer::start);
+        if (stopType == StopType.RX) {
+            return new TimingPublisher<>((Publisher<?>) pjp.proceed(),
+                    () -> {
+                        Optional<LongTaskTimer.Sample> sample = timer.map(LongTaskTimer::start);
+                        return throwable -> sample.ifPresent(this::stopTimer);
+                    });
+        }
 
-        if (stopWhenCompleted) {
+        Optional<LongTaskTimer.Sample> sample = timer.map(LongTaskTimer::start);
+        if (stopType == StopType.ASYNC) {
             try {
                 return ((CompletionStage<?>) pjp.proceed())
                         .whenComplete((result, throwable) -> sample.ifPresent(this::stopTimer));
@@ -305,4 +333,50 @@ public class TimedAspect {
         }
     }
 
+    enum StopType {
+        NONE, // synchronous method call
+        ASYNC, // CompletableFuture
+        RX, // publisher
+    }
+
+    @SuppressWarnings("ReactiveStreamsPublisherImplementation")
+    @AllArgsConstructor
+    public static class TimingPublisher<T> implements Publisher<T> {
+        private final Publisher<T> delegate;
+        private final Supplier<Consumer<Throwable>> sampler;
+
+        @Override
+        public void subscribe(Subscriber<? super T> s) {
+            delegate.subscribe(new TimingSubscriber<>(s, sampler.get()));
+        }
+
+        @SuppressWarnings("ReactiveStreamsSubscriberImplementation")
+        @AllArgsConstructor
+        static class TimingSubscriber<S> implements Subscriber<S> {
+            private final Subscriber<S> delegate;
+            private final Consumer<Throwable> callback;
+
+            @Override
+            public void onSubscribe(Subscription s) {
+                delegate.onSubscribe(s);
+            }
+
+            @Override
+            public void onNext(S s) {
+                delegate.onNext(s);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                delegate.onError(t);
+                callback.accept(t);
+            }
+
+            @Override
+            public void onComplete() {
+                delegate.onComplete();
+                callback.accept(null);
+            }
+        }
+    }
 }

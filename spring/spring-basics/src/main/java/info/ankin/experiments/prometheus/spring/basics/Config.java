@@ -11,4 +11,9 @@ public class Config {
     CountedAspect countedAspect(MeterRegistry meterRegistry) {
         return new CountedAspect(meterRegistry);
     }
+
+    @Bean
+    TimedAspect timedAspect(MeterRegistry meterRegistry) {
+        return new TimedAspect(meterRegistry);
+    }
 }
