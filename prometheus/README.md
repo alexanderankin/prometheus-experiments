@@ -33,3 +33,7 @@ while true; do curl -s -w '\n' ${lh}:$p/actuator/prometheus | curl -s --data-bin
 ### Spring Boot statistics:
 
 ![Spring Boot Statistics grafana dashboard preview](./spring-boot-statistics.png)
+
+### Basics Service Metrics
+
+![Basics Service Metrics grafana dashboard preview](./basics-service-metrics.png)
