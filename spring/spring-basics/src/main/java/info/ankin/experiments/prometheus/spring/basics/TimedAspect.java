@@ -28,6 +28,7 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
@@ -216,10 +217,12 @@ public class TimedAspect {
 
         if (stopType == StopType.RX) {
             Publisher<?> publisher = (Publisher<?>) pjp.proceed();
-            return new TimingPublisher<>(publisher, () -> {
+            Publisher<?> wrapped = new TimingPublisher<>(publisher, () -> {
                 Timer.Sample sample = Timer.start(registry);
                 return t -> record(pjp, timed, metricName, sample, t == null ? DEFAULT_EXCEPTION_TAG_VALUE : t.getClass().getSimpleName());
             });
+            //noinspection ReactiveStreamsUnusedPublisher
+            return publisher instanceof Mono ? Mono.from(wrapped) : publisher;
         }
 
         Timer.Sample sample = Timer.start(registry);
@@ -282,11 +285,13 @@ public class TimedAspect {
         Optional<LongTaskTimer> timer = buildLongTaskTimer(pjp, timed, metricName);
 
         if (stopType == StopType.RX) {
-            return new TimingPublisher<>((Publisher<?>) pjp.proceed(),
+            Publisher<?> publisher = (Publisher<?>) pjp.proceed();
+            Publisher<?> wrapped = new TimingPublisher<>(publisher,
                     () -> {
                         Optional<LongTaskTimer.Sample> sample = timer.map(LongTaskTimer::start);
                         return throwable -> sample.ifPresent(this::stopTimer);
                     });
+            return publisher instanceof Mono ? Mono.from(wrapped) : wrapped;
         }
 
         Optional<LongTaskTimer.Sample> sample = timer.map(LongTaskTimer::start);
