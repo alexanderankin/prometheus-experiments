@@ -25,8 +25,8 @@ dependencies {
 	annotationProcessor platform('org.springframework.boot:spring-boot-dependencies:2.7.2')
     implementation platform('org.springframework.cloud:spring-cloud-dependencies:2021.0.3')
 
-	annotationProcessor 'org.projectlombok:lombok'
-	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok:1.18.42'
+	compileOnly 'org.projectlombok:lombok:1.18.42'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -42,3 +42,8 @@ dependencies {
 tasks.withType(Test) { useJUnitPlatform() }
 
 sourceSets.create('clientApplication')
+
+tasks.register('bootRun', JavaExec) {
+  mainClass = 'info.ankin.experiments.prometheus.spring.basics.BasicsApplication'
+  classpath = sourceSets.main.runtimeClasspath
+}
